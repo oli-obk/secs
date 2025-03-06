@@ -44,7 +44,7 @@ pub trait SparseSetGetter {
     type Iter<'c>;
     fn get_set(world: &World) -> Option<Self::Iter<'_>>;
     fn get_entity<'b>(iter: &'b mut Self::Iter<'_>, entity: Entity) -> Option<Self::Short<'b>>;
-    fn iter<'b>(iter: &'b mut Self::Iter<'_>) -> impl Iterator<Item = (Entity, Self::Short<'b>)>
+    fn iter(iter: Self::Iter<'_>, f: impl for<'b> FnMut(Entity, Self::Short<'b>))
     where
         Self: Always;
 }
@@ -60,7 +60,7 @@ impl<C: 'static> SparseSetGetter for &C {
         iter.get(entity)
     }
     fn iter<'b>(iter: &'b mut Self::Iter<'_>) -> impl Iterator<Item = (Entity, Self::Short<'b>)> {
-        iter.iter()
+        (&**iter).into_iter()
     }
 }
 
@@ -74,11 +74,11 @@ impl<T: SparseSetGetter> SparseSetGetter for Option<T> {
     fn get_entity<'b>(iter: &'b mut Self::Iter<'_>, entity: Entity) -> Option<Self::Short<'b>> {
         Some(T::get_entity(iter, entity))
     }
-    fn iter<'b>(_iter: &'b mut Self::Iter<'_>) -> impl Iterator<Item = (Entity, Self::Short<'b>)>
+    fn iter(_iter: Self::Iter<'_>, _f: impl for<'b> FnMut(Entity, Self::Short<'b>))
     where
         Self: Always,
     {
-        std::iter::once_with(|| unreachable!())
+        unreachable!()
     }
 }
 
@@ -93,7 +93,7 @@ impl<C: 'static> SparseSetGetter for &mut C {
         iter.get_mut(entity)
     }
     fn iter<'b>(iter: &'b mut Self::Iter<'_>) -> impl Iterator<Item = (Entity, Self::Short<'b>)> {
-        iter.iter_mut()
+        (&mut **iter).into_iter()
     }
 }
 
@@ -105,10 +105,10 @@ impl<T: SparseSetGetter + Always> Query for (T,) {
         world: &World,
         mut f: impl for<'b, 'c, 'd, 'e, 'f> FnMut(Entity, Self::Short<'b, 'c, 'd, 'e, 'f>),
     ) {
-        if let Some(mut s1) = T::get_set(world) {
-            for (entity, c1) in T::iter(&mut s1) {
+        if let Some(s1) = T::get_set(world) {
+            T::iter(s1, |entity, c1| {
                 f(entity, (c1,));
-            }
+            })
         }
     }
 }
@@ -121,12 +121,12 @@ impl<T: SparseSetGetter + Always, U: SparseSetGetter> Query for (T, U) {
         world: &World,
         mut f: impl for<'b, 'c, 'd, 'e, 'f> FnMut(Entity, Self::Short<'b, 'c, 'd, 'e, 'f>),
     ) {
-        if let (Some(mut s1), Some(mut s2)) = (T::get_set(world), U::get_set(world)) {
-            for (entity, c1) in T::iter(&mut s1) {
+        if let (Some(s1), Some(mut s2)) = (T::get_set(world), U::get_set(world)) {
+            T::iter(s1, |entity, c1| {
                 if let Some(c2) = U::get_entity(&mut s2, entity) {
                     f(entity, (c1, c2));
                 }
-            }
+            })
         }
     }
 }
@@ -139,16 +139,16 @@ impl<T: SparseSetGetter + Always, U: SparseSetGetter, V: SparseSetGetter> Query 
         world: &World,
         mut f: impl for<'b, 'c, 'd, 'e, 'f> FnMut(Entity, Self::Short<'b, 'c, 'd, 'e, 'f>),
     ) {
-        if let (Some(mut s1), Some(mut s2), Some(mut s3)) =
+        if let (Some(s1), Some(mut s2), Some(mut s3)) =
             (T::get_set(world), U::get_set(world), V::get_set(world))
         {
-            for (entity, c1) in T::iter(&mut s1) {
+            T::iter(s1, |entity, c1| {
                 if let Some(c2) = U::get_entity(&mut s2, entity) {
                     if let Some(c3) = V::get_entity(&mut s3, entity) {
                         f(entity, (c1, c2, c3));
                     }
                 }
-            }
+            })
         }
     }
 }
@@ -163,13 +163,13 @@ impl<T: SparseSetGetter + Always, U: SparseSetGetter, V: SparseSetGetter, W: Spa
         world: &World,
         mut f: impl for<'b, 'c, 'd, 'e, 'f> FnMut(Entity, Self::Short<'b, 'c, 'd, 'e, 'f>),
     ) {
-        if let (Some(mut s1), Some(mut s2), Some(mut s3), Some(mut s4)) = (
+        if let (Some(s1), Some(mut s2), Some(mut s3), Some(mut s4)) = (
             T::get_set(world),
             U::get_set(world),
             V::get_set(world),
             W::get_set(world),
         ) {
-            for (entity, c1) in T::iter(&mut s1) {
+            T::iter(s1, |entity, c1| {
                 if let Some(c2) = U::get_entity(&mut s2, entity) {
                     if let Some(c3) = V::get_entity(&mut s3, entity) {
                         if let Some(c4) = W::get_entity(&mut s4, entity) {
@@ -177,7 +177,7 @@ impl<T: SparseSetGetter + Always, U: SparseSetGetter, V: SparseSetGetter, W: Spa
                         }
                     }
                 }
-            }
+            })
         }
     }
 }
@@ -203,14 +203,14 @@ impl<
         world: &World,
         mut f: impl for<'b, 'c, 'd, 'e, 'f> FnMut(Entity, Self::Short<'b, 'c, 'd, 'e, 'f>),
     ) {
-        if let (Some(mut s1), Some(mut s2), Some(mut s3), Some(mut s4), Some(mut s5)) = (
+        if let (Some(s1), Some(mut s2), Some(mut s3), Some(mut s4), Some(mut s5)) = (
             T::get_set(world),
             U::get_set(world),
             V::get_set(world),
             W::get_set(world),
             X::get_set(world),
         ) {
-            for (entity, c1) in T::iter(&mut s1) {
+            T::iter(s1, |entity, c1| {
                 if let Some(c2) = U::get_entity(&mut s2, entity) {
                     if let Some(c3) = V::get_entity(&mut s3, entity) {
                         if let Some(c4) = W::get_entity(&mut s4, entity) {
@@ -220,7 +220,7 @@ impl<
                         }
                     }
                 }
-            }
+            })
         }
     }
 }
