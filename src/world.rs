@@ -95,6 +95,21 @@ impl World {
         Q::get_components(self, f)
     }
 
+    pub fn query_retain<C: 'static>(&self, mut f: impl for<'a> FnMut(Entity, &'a mut C) -> bool) {
+        let Some(mut set) = self.sparse_sets.get_mut::<C>() else {
+            return;
+        };
+        let set = &mut *set;
+        set.sparse.retain(|&entity, &id| {
+            let retain = f(entity, &mut set.dense[id]);
+            if !retain {
+                // This is not very performant if elements get removed frequently
+                set.dense.remove(id);
+            }
+            retain
+        });
+    }
+
     pub fn add_resource<R: 'static + SendSync>(&mut self, res: R) {
         self.resources.insert(TypeId::of::<R>(), Box::new(res));
     }
