@@ -11,7 +11,9 @@ use crate::world::{Entity, SendSync};
 
 pub struct SparseSet<C> {
     pub sparse: HashMap<Entity, usize>,
-    pub dense: Vec<C>,
+    /// Entries that have been freed and are thus available again.
+    pub empty: Vec<usize>,
+    pub dense: Vec<Option<C>>,
     pub ids: Vec<Entity>,
 }
 
@@ -22,51 +24,54 @@ impl<C> SparseSet<C> {
 
         Self {
             sparse,
-            dense: vec![component],
+            empty: vec![],
+            dense: vec![Some(component)],
             ids: vec![entity],
         }
     }
 
     pub fn insert(&mut self, entity: Entity, component: C) {
         self.sparse.insert(entity, self.dense.len());
-        self.dense.push(component);
-        self.ids.push(entity);
+        if let Some(idx) = self.empty.pop() {
+            self.ids[idx] = entity;
+            self.dense[idx] = Some(component);
+        } else {
+            self.dense.push(Some(component));
+            self.ids.push(entity);
+        }
     }
 
     pub fn remove(&mut self, entity: Entity) {
         if let Some(idx) = self.sparse.remove(&entity) {
-            let last = self.dense.len() - 1;
-
-            if idx != last {
-                self.dense.swap(idx, last);
-                let entity = *self.ids.last().unwrap();
-                self.ids.swap(idx, last);
-
-                let _prev = self.sparse.insert(entity, idx);
-                debug_assert_eq!(_prev, Some(last));
-            }
-
-            self.dense.pop();
-            self.ids.pop();
+            self.empty.push(idx);
+            self.dense[idx].take();
         }
     }
 
     pub fn get(&self, entity: Entity) -> Option<&C> {
         let &id = self.sparse.get(&entity)?;
-        Some(&self.dense[id])
+        Some(self.dense[id].as_ref().unwrap())
     }
 
     pub fn get_mut(&mut self, entity: Entity) -> Option<&mut C> {
         let &id = self.sparse.get(&entity)?;
-        Some(&mut self.dense[id])
+        Some(self.dense[id].as_mut().unwrap())
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (Entity, &C)> {
-        self.ids.iter().copied().zip(self.dense.iter())
+        self.ids
+            .iter()
+            .copied()
+            .zip(self.dense.iter())
+            .filter_map(|(e, i)| Some((e, i.as_ref()?)))
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (Entity, &mut C)> {
-        self.ids.iter().copied().zip(self.dense.iter_mut())
+        self.ids
+            .iter()
+            .copied()
+            .zip(self.dense.iter_mut())
+            .filter_map(|(e, i)| Some((e, i.as_mut()?)))
     }
 }
 
