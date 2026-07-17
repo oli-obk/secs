@@ -90,11 +90,11 @@ impl World {
     /// ```rust
     /// # use secs::World;
     /// # let world = World::default();
-    /// world.spawn(("player", 42));
-    /// world.spawn(("animal", 12, 5.3));
+    /// world.spawn("player", 42);
+    /// world.spawn("animal", 12, 5.3);
     /// ```
     #[track_caller]
-    pub fn spawn<C: AttachComponents>(&self, components: C) -> Entity {
+    pub fn spawn<C: AttachComponents>(&self, #[splat] components: C) -> Entity {
         components.attach_to(self, self.entities.inc())
     }
 
@@ -178,7 +178,7 @@ impl World {
     /// ```rust
     /// # use secs::World;
     /// # let world = World::default();
-    /// # let entity = world.spawn(("player", 42));
+    /// # let entity = world.spawn("player", 42);
     /// world.detach_any::<i32>();
     /// assert!(!world.is_attached::<i32>(entity));
     /// ```
