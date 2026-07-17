@@ -128,7 +128,7 @@ impl World {
 
     /// Attach multiple components to an entity at once.
     #[track_caller]
-    pub fn attach<C: AttachComponents>(&self, entity: Entity, components: C) {
+    pub fn attach<C: AttachComponents>(&self, entity: Entity, #[splat] components: C) {
         components.attach_to(self, entity);
     }
 
